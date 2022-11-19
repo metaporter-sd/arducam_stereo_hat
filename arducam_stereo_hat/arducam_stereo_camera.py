@@ -1,115 +1,168 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+# Credit to ArduCAM/Camarray_HAT repo for script set-up
 
 import cv2
 import numpy as np
-from datetime import datetime
-import os
-import argparse
 
 import rclpy
-#from rclpy.node import Node
-from cv_bridge import CvBridge, CvBridgeError
+from cv_bridge import CvBridge, CvBridgeError 
+from rclpy.node import Node
 from sensor_msgs.msg import Image, CameraInfo
-from camera_info_manager import CameraInfoManager
+#from camera_info_manager import CameraInfoManager # TODO: ros1_bridge for camera info
 
 
 class CameraPublisher(Node):
 
-    def __init__(self):
+    def __init__(self, left_info_url, right_info_url):
         super().__init__('arducam_camera_publisher')
-        self.publisher_ = self.create_publisher(
+        '''
+        # Set up CameraInfoManager's for left & right cameras
+        self.left_info_mgr = CameraInfoManager(cname='left_camera', namespace='left')
+        self.right_info_mgr = CameraInfoManager(cname='right_camera', namespace='right')
+        
+        self.left_info_mgr.setURL(left_info_url)
+        self.right_info_mgr.setURL(right_info_url)
+        
+        self.left_info_mgr.loadCameraInfo()
+        self.right_info_mgr.loadCameraInfo()
+
+        '''
+
+        # Create image publishers
+        self.left_pub = self.create_publisher(Image, 'left_image', 10)
+        self.right_pub = self.create_publisher(Image, 'right_image', 10)
+
+        # Create cameraInfo publishers
+        #self.left_info_pub = self.create_publisher(CameraInfo, 'left_camera_info', 10)
+        #self.right_info_pub = self.create_publisher(CameraInfo, 'right_camera_info', 10)
+
+        print("start\n")
+        print(gstreamer_pipeline())
+        print("\nstop\n")
+
+        self.cap = cv2.VideoCapture(gstreamer_pipeline(), cv2.CAP_GSTREAMER)
+
+        if not self.cap.isOpened():
+            print("Cannot open camera")
+            exit()
+
+        # Set up timer & rate
         timer_period = 1    # seconds
-        self.timer = self.create_timer()
+        self.timer = self.create_timer(timer_period, self.timer_callback)
         self.i = 0
 
     def timer_callback(self):
-        
+        # Capture frame-by-frame
+        ret, frame = self.cap.read()
 
-def resize(frame, dst_width):
-    width = frame.shape[1]
-    height = frame.shape[0]
-    scale = dst_width * 1.0 / width
-    return cv2.resize(frame, (int(scale * width), int(scale * height)))
+        # if frame is read correctly ret is True
+        if not ret:
+            print("Can't receive frame (stream end?). Exiting ...")
+            raise SystemExit
 
-def run(cap):
+        # Our operations on the frame come here
+        #gray = cv2.cvtColor(frame, cv.COLOR_BGR2GRAY)
 
-    left_info_mgr = CameraInfoManager(cname='left_camera', namespace='left')
-    right_info_mgr = CameraInfoManager(cname='right_camera', namespace='right')
-    
-    left_info_mgr.setURL(left_info_url)
-    right_info_mgr.setURL(right_info_url)
-    
-    left_info_mgr.loadCameraInfo()
-    right_info_mgr.loadCameraInfo()
-
-    left_pub = rospy.Publisher('left/image_raw', Image, queue_size=10)
-    right_pub = rospy.Publisher('right/image_raw', Image, queue_size=10)
-
-    left_info_pub = rospy.Publisher('left/camera_info', CameraInfo, queue_size=10)
-    right_info_pub = rospy.Publisher('right/camera_info', CameraInfo, queue_size=10)
-
-    bridge = CvBridge()
-
-    while not rospy.is_shutdown():
-        ret, frame = cap.read()
-        #if arducam_utils.convert2rgb == 0:
-        w = cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        h = cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-        frame = frame.reshape(int(h), int(w))
-
-        frame = arducam_utils.convert(frame)
-
+        # Get the proper encoding for image publishing
         encoding = "bgr8" if len(frame.shape) == 3 and frame.shape[2] >= 3 else "mono8"
 
         width = frame.shape[1]
         height = frame.shape[0]
 
+        # Get the left & right imgs from the frame
         left_img = frame[:, :width//2]
         right_img = frame[:, width//2:]
 
+        # Display the resulting frame
+        cv2.imshow('frame', frame)
+        keyCode = cv2.waitKey(30) & 0xFF
+
+        # Stop the program on the ESC key
+        if keyCode == 27:
+            raise SystemExit
+
+        # Get the capture time of the images for msg header
+        capture_time = self.get_clock().now().to_msg()
+
+        # Set up left_img_msg with cv_bridge & header info
         left_img_msg = bridge.cv2_to_imgmsg(left_img, encoding)
-        left_img_msg.header.frame_id = frame_id
-
-        right_img_msg = bridge.cv2_to_imgmsg(right_img, encoding)
-        right_img_msg.header.frame_id = frame_id
-
-        #capture_time = rospy.Time.now()
-
+        left_img_msg.header.frame_id = 0   #TODO: add frame_id from ros parameters
         left_img_msg.header.stamp = capture_time
+
+        # Set up right_img_msg with cv_bridge & header info
+        right_img_msg = bridge.cv2_to_imgmsg(right_img, encoding)
+        right_img_msg.header.frame_id = 0   #TODO: add frame_id from ros parameters
         right_img_msg.header.stamp = capture_time
 
-        left_pub.publish(left_img_msg)
-        right_pub.publish(right_img_msg)
+        '''
+        # Get cameraInfo from the managers
+        info_left = self.left_info_mgr.getCameraInfo()
+        info_right = self.right_info_mgr.getCameraInfo()
 
-        info_left = left_info_mgr.getCameraInfo()
-        info_right = right_info_mgr.getCameraInfo()
-
-        #info_left.header.stamp = capture_time
-        #info_right.header.stamp = capture_time
-
-        info_left.header.frame_id = frame_id
-        info_right.header.frame_id = frame_id
+        # Set the header info
+        info_left.header.stamp = capture_time
+        info_right.header.stamp = capture_time
+        info_left.header.frame_id = 0   #TODO: add frame_id from ros parameters
+        info_right.header.frame_id = 0  #TODO: add frame_id from ros parameters
+        '''
         
-        left_info_pub.publish(info_left)
-        right_info_pub.publish(info_right)
+        # Publish imgs & cameraInfo
+        self.left_pub.publish(left_img_msg)
+        self.right_pub.publish(right_img_msg)
+        #self.left_info_pub.publish(info_left)
+        #self.right_info_pub.publish(info_right)
+
+        self.get_logger().info('Publishing: "%s"' % str(self.i))
+        self.i += 1
         
-    pass
 
-
-def fourcc(a, b, c, d):
-    return ord(a) | (ord(b) << 8) | (ord(c) << 16) | (ord(d) << 24)
-
-def pixelformat(string):
-    if len(string) != 3 and len(string) != 4:
-        msg = "{} is not a pixel format".format(string)
-        raise argparse.ArgumentTypeError(msg)
-    if len(string) == 3:
-        return fourcc(string[0], string[1], string[2], ' ')
-    else:
-        return fourcc(string[0], string[1], string[2], string[3])
+def gstreamer_pipeline(capture_width=2592, capture_height=1944, display_width=1440,
+    display_height=1080,
+    framerate=10,
+    flip_method=2,
+):
+	#credit: JetsonHacks
+    return (
+		"nvarguscamerasrc sensor-id=0 ! "
+        "video/x-raw(memory:NVMM), "
+        "width=(int)%d, height=(int)%d, "
+        "format=(string)NV12, framerate=(fraction)%d/1 ! "
+        "nvvidconv flip-method=%d ! "
+        "video/x-raw, width=(int)%d, height=(int)%d, format=(string)BGRx ! "
+        "videoconvert ! "
+        "video/x-raw, format=(string)BGR ! appsink"
+        % (
+            capture_width,
+            capture_height,
+            framerate,
+            flip_method,
+            display_width,
+            display_height,
+        )
+    )
 
 def main(args=None):
     rclpy.init(args=args)
+
+    camera_publisher = CameraPublisher("left_url", "right_url") #TODO: add CameraInfoManager URLs (using ros parameters [see comment block below])
+
+    try:
+        rclpy.spin(camera_publisher)
+    except SystemExit:
+        rclpy.logging.get_logger("Quitting").info('Done')
+
+    camera_publisher.cap.release()
+    cv2.destroyAllWindows()
+
+    camera_publisher.destroy_node()
+    rclpy.shutdown()
+
+if __name__ == "__main__":
+    main()
+
+
+'''
+    #parameters and functions that might be useful from original script (converted to ROS2)
 
     try:
         device = rclpy.get_parameter("~device")
@@ -126,12 +179,6 @@ def main(args=None):
             print("Failed to set pixel format.")
     except:
         pass
-
-    #arducam_utils = ArducamUtils(device)
-
-    # turn off RGB conversion
-    #if arducam_utils.convert2rgb == 0:
-    #    cap.set(cv2.CAP_PROP_CONVERT_RGB, arducam_utils.convert2rgb)
     
     try:
         width = rclpy.get_parameter("~width")
@@ -160,6 +207,4 @@ def main(args=None):
 
     # release camera
     cap.release()
-
-if __name__ == "__main__":
-	main()
+'''
