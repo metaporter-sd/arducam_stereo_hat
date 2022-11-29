@@ -10,7 +10,7 @@ def record():
 		--orientation=2 \
 		--automate \
 		--capture-auto \
-		--file-name=test_video \
+		--file-name=./data/test_video \
 		--capture-time=15 \
 		"
 	os.system(cmd)

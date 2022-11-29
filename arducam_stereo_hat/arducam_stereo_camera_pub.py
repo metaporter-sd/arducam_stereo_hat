@@ -76,24 +76,26 @@ class CameraPublisher(Node):
         right_img = frame[:, width//2:]
 
         # Display the resulting frame
+        '''
         cv2.imshow('frame', frame)
         keyCode = cv2.waitKey(30) & 0xFF
 
         # Stop the program on the ESC key
         if keyCode == 27:
             raise SystemExit
+        '''
 
         # Get the capture time of the images for msg header
         capture_time = self.get_clock().now().to_msg()
 
         # Set up left_img_msg with cv_bridge & header info
         left_img_msg = self.bridge.cv2_to_imgmsg(left_img, encoding)
-        left_img_msg.header.frame_id = 0   #TODO: add frame_id from ros parameters
+        left_img_msg.header.frame_id = "0"   #TODO: add frame_id from ros parameters
         left_img_msg.header.stamp = capture_time
 
         # Set up right_img_msg with cv_bridge & header info
         right_img_msg = self.bridge.cv2_to_imgmsg(right_img, encoding)
-        right_img_msg.header.frame_id = 0   #TODO: add frame_id from ros parameters
+        right_img_msg.header.frame_id = "0"   #TODO: add frame_id from ros parameters
         right_img_msg.header.stamp = capture_time
 
         '''
@@ -104,8 +106,8 @@ class CameraPublisher(Node):
         # Set the header info
         info_left.header.stamp = capture_time
         info_right.header.stamp = capture_time
-        info_left.header.frame_id = 0   #TODO: add frame_id from ros parameters
-        info_right.header.frame_id = 0  #TODO: add frame_id from ros parameters
+        info_left.header.frame_id = "0"   #TODO: add frame_id from ros parameters
+        info_right.header.frame_id = "0"  #TODO: add frame_id from ros parameters
         '''
         
         # Publish imgs & cameraInfo

@@ -20,8 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'talker = arducam_stereo_hat.arducam_stereo_camera_pub:main'
-            'listener = arducam_stereo_hat.arducam_stereo_camera_sub:main'
+            'talker = arducam_stereo_hat.arducam_stereo_camera_pub:main',
+            'listener = arducam_stereo_hat.arducam_stereo_camera_sub:main',
         ],
     },
 )
