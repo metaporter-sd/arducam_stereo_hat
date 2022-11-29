@@ -27,16 +27,16 @@ class CameraSubscriber(Node):
         # Convert msg to img in cv2
 		try:
 			cv2_img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-
+			'''
 			cv2.imshow('frame', cv2_img)
 			keyCode = cv2.waitKey(30) & 0xFF
 			
 			# Stop the program on the ESC key
 			if keyCode == 27:
 				raise SystemExit
-			
+			'''
 			# Write img to file in imgs/ folder
-			#cv2.imwrite('/imgs/img_' + str(self.i) + '.jpeg', cv2_img)
+			cv2.imwrite('data/img_' + str(self.i) + '.jpeg', cv2_img)
 
 			self.get_logger().info('Listening: "%s"' % str(self.i))
 			self.i += 1
